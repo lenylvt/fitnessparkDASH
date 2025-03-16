@@ -105,7 +105,7 @@ export function AddUserForm({ onSubmit, onCancel, initialData }: AddUserFormProp
       </div>
 
       <div className="space-y-3">
-        <Label>Type d'abonnement</Label>
+        <Label>Type d&apos;abonnement</Label>
         <Select value={subscription} onValueChange={(value: SubscriptionType) => setSubscription(value)}>
           <SelectTrigger>
             <SelectValue placeholder="Choisir un abonnement" />
@@ -136,7 +136,7 @@ export function AddUserForm({ onSubmit, onCancel, initialData }: AddUserFormProp
         {(showAddMember || memberId || memberNumber) && (
           <div className="space-y-4 p-4 border rounded-lg">
             <p className="text-sm text-muted-foreground mb-2">
-              Entrez les informations du QR code principal de l'adhérent
+              Entrez les informations du QR code principal de l&apos;adhérent
             </p>
             <div className="space-y-4">
               <div>

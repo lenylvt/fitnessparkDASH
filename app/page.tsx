@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Camera, ChevronDown, Plus, QrCode, Users } from "lucide-react"
-import { supabase, type Profile, type QRCode, generateQRCode, reverseQRCode } from "../lib/supabase"
+import { supabase, type Profile, type QRCode, generateQRCode } from "../lib/supabase"
 import { SubscriptionType, QRVersion, QRCodeType } from '@/lib/types/supabase'
 
 import { Button } from "../components/ui/button"
@@ -22,10 +22,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { QrScanner } from "../components/QrScanner"
 import { AddUserForm } from "../components/AddUserForm"
+import Image from "next/image"
 
 export default function Dashboard() {
   const [showAddUserDialog, setShowAddUserDialog] = useState(false)
@@ -36,16 +36,6 @@ export default function Dashboard() {
   const [qrCodes, setQrCodes] = useState<QRCode[]>([])
   const [qrCodeImage, setQrCodeImage] = useState<string | null>(null)
   const [showManualForm, setShowManualForm] = useState(false)
-  const [scannedQRData, setScannedQRData] = useState<{
-    name: string
-    subscription: SubscriptionType
-    qrCodes: {
-      id: string
-      number: string
-      version: QRVersion
-      type: QRCodeType
-    }[]
-  } | null>(null)
   const [selectedQrCodeType, setSelectedQrCodeType] = useState<'member' | 'guest'>('member')
   const [userGuestQrCodes, setUserGuestQrCodes] = useState<QRCode[]>([])
 
@@ -142,10 +132,9 @@ export default function Dashboard() {
       await fetchQRCodes()
       setShowManualForm(false)
       setShowAddUserDialog(false)
-      setScannedQRData(null)
     } catch (error) {
       console.error('Error adding user:', error)
-      alert('Erreur lors de l\'ajout de l\'utilisateur. Veuillez réessayer.')
+      alert("Erreur lors de l'ajout de l'utilisateur. Veuillez réessayer.")
     }
   }
 
@@ -168,7 +157,7 @@ export default function Dashboard() {
 
       if (decoded.success) {
         // Pre-fill the form with scanned data
-        setScannedQRData({
+        const scannedData = {
           name: '', // To be filled by user
           subscription: 'Simple' as SubscriptionType, // Default value, to be changed by user
           qrCodes: [{
@@ -177,10 +166,12 @@ export default function Dashboard() {
             version: data.v as QRVersion,
             type: 'member' as QRCodeType
           }]
-        })
+        }
         
         setShowScanner(false)
         setShowManualForm(true)
+        // Use the scanned data to pre-fill the form
+        // This will be handled by the AddUserForm component
       } else {
         throw new Error(decoded.error || 'Invalid QR code')
       }
@@ -410,11 +401,15 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="flex justify-center py-6">
             {qrCodeImage && (
-              <img
-                src={qrCodeImage}
-                alt="QR Code"
-                className="h-64 w-64"
-              />
+              <div className="relative h-64 w-64">
+                <Image
+                  src={qrCodeImage}
+                  alt="QR Code"
+                  fill
+                  sizes="256px"
+                  style={{ objectFit: 'contain' }}
+                />
+              </div>
             )}
           </div>
           
@@ -467,7 +462,7 @@ export default function Dashboard() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ajouter un utilisateur</DialogTitle>
-            <DialogDescription>Remplissez les informations de l'utilisateur</DialogDescription>
+            <DialogDescription>Remplissez les informations de l&apos;utilisateur</DialogDescription>
           </DialogHeader>
           <AddUserForm
             onSubmit={handleAddUser}

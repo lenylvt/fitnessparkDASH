@@ -38,6 +38,16 @@ export default function Dashboard() {
   const [showManualForm, setShowManualForm] = useState(false)
   const [selectedQrCodeType, setSelectedQrCodeType] = useState<'member' | 'guest'>('member')
   const [userGuestQrCodes, setUserGuestQrCodes] = useState<QRCode[]>([])
+  const [scannedData, setScannedData] = useState<{
+    name?: string
+    subscription?: SubscriptionType
+    qrCode?: {
+      id: string
+      number: string
+      version: QRVersion
+    }
+  } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -132,6 +142,7 @@ export default function Dashboard() {
       await fetchQRCodes()
       setShowManualForm(false)
       setShowAddUserDialog(false)
+      setScannedData(null)
     } catch (error) {
       console.error('Error adding user:', error)
       alert("Erreur lors de l'ajout de l'utilisateur. Veuillez réessayer.")
@@ -140,44 +151,76 @@ export default function Dashboard() {
 
   const handleScanResult = async (result: string) => {
     try {
-      // Parse the QR code data
-      const data = JSON.parse(result)
+      setIsLoading(true)
       
-      if (!data.id || typeof data.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
-        throw new Error('Invalid QR code ID format')
+      // Parse the QR code data
+      let data;
+      try {
+        data = JSON.parse(result);
+      } catch (e) {
+        // Try to handle non-JSON QR codes
+        console.log("Failed to parse as JSON, trying alternative format:", result);
+        
+        // Try to extract data from a non-JSON format
+        const matches = result.match(/id[\"']?\s*:\s*[\"']?(\d+)[\"']?.*sg[\"']?\s*:\s*[\"']?([^\"',}]+)[\"']?.*t[\"']?\s*:\s*[\"']?(\d+)[\"']?.*v[\"']?\s*:\s*[\"']?([^\"',}]+)[\"']?/);
+        
+        if (matches && matches.length >= 5) {
+          data = {
+            id: matches[1],
+            sg: matches[2],
+            t: parseInt(matches[3]),
+            v: matches[4]
+          };
+          console.log("Extracted data:", data);
+        } else {
+          throw new Error("Format de QR code non reconnu");
+        }
       }
+      
+      if (!data || !data.id) {
+        throw new Error('Format de QR code invalide: ID manquant');
+      }
+      
+      // Convert numeric ID to string if needed
+      const qrId = String(data.id);
+      const signature = data.sg;
+      const timestamp = data.t;
+      const version = data.v;
+      
+      console.log(`Calling API with: id=${qrId}, sg=${signature}, t=${timestamp}, v=${version}`);
       
       // Call the reverse API to get the number
-      const response = await fetch(`/api/reverse/${data.id}/${data.sg}/${data.t}/${data.v}`)
+      const apiUrl = `https://fitnesspark-api.vercel.app/api/reverse/${qrId}/${signature}/${timestamp}/${version}`;
+      console.log("API URL:", apiUrl);
+      
+      const response = await fetch(apiUrl);
       if (!response.ok) {
-        throw new Error('Failed to fetch QR code data')
+        throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
       }
 
-      const decoded = await response.json()
+      const decoded = await response.json();
+      console.log("API response:", decoded);
 
       if (decoded.success) {
         // Pre-fill the form with scanned data
-        const scannedData = {
-          name: '', // To be filled by user
-          subscription: 'Simple' as SubscriptionType, // Default value, to be changed by user
-          qrCodes: [{
-            id: data.id,
+        setScannedData({
+          qrCode: {
+            id: qrId,
             number: decoded.number,
-            version: data.v as QRVersion,
-            type: 'member' as QRCodeType
-          }]
-        }
+            version: version as QRVersion
+          }
+        })
         
         setShowScanner(false)
         setShowManualForm(true)
-        // Use the scanned data to pre-fill the form
-        // This will be handled by the AddUserForm component
       } else {
-        throw new Error(decoded.error || 'Invalid QR code')
+        throw new Error(decoded.error || 'QR code invalide')
       }
     } catch (error) {
       console.error('Error processing QR code:', error)
-      alert('QR code invalide ou mal formaté. Veuillez réessayer.')
+      alert(`QR code invalide ou mal formaté: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -264,44 +307,10 @@ export default function Dashboard() {
             <CardTitle className="text-2xl">FitnessPark QR Codes</CardTitle>
             <CardDescription>Gérez les QR codes de vos utilisateurs</CardDescription>
           </div>
-          <Dialog open={showAddUserDialog} onOpenChange={setShowAddUserDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Ajouter un utilisateur
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Ajouter un nouvel utilisateur</DialogTitle>
-                <DialogDescription>Choisissez comment ajouter un nouvel utilisateur</DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-2 gap-4 pt-4">
-                <Button 
-                  variant="outline" 
-                  className="h-24 flex-col gap-2"
-                  onClick={() => {
-                    setShowAddUserDialog(false)
-                    setShowManualForm(true)
-                  }}
-                >
-                  <Plus className="h-8 w-8" />
-                  Saisie manuelle
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="h-24 flex-col gap-2"
-                  onClick={() => {
-                    setShowAddUserDialog(false)
-                    setShowScanner(true)
-                  }}
-                >
-                  <Camera className="h-8 w-8" />
-                  Utiliser la caméra
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setShowManualForm(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Ajouter un utilisateur
+          </Button>
         </CardHeader>
         <CardContent>
           <Table>
@@ -395,7 +404,7 @@ export default function Dashboard() {
             </DialogTitle>
             <DialogDescription>
               {selectedQrCodeType === 'member' 
-                ? "Scannez ce QR code pour accéder aux détails de l'utilisateur" 
+                ? "Scannez ce QR code pour accéder aux détails de l&apos;utilisateur" 
                 : "QR code invité pour les abonnements Ultimate"}
             </DialogDescription>
           </DialogHeader>
@@ -459,14 +468,18 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={showManualForm} onOpenChange={setShowManualForm}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Ajouter un utilisateur</DialogTitle>
             <DialogDescription>Remplissez les informations de l&apos;utilisateur</DialogDescription>
           </DialogHeader>
           <AddUserForm
+            initialData={scannedData}
             onSubmit={handleAddUser}
-            onCancel={() => setShowManualForm(false)}
+            onCancel={() => {
+              setShowManualForm(false)
+              setScannedData(null)
+            }}
           />
         </DialogContent>
       </Dialog>
